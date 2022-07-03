@@ -31,7 +31,7 @@
     int x{0}; 
     cout << sizeif(x) << ' ' << sizeof(int);
     ```
-- 如何使用`auto`时制定类型？
+- 如何使用`auto`时指定类型？
   - `auto x{1ll};`
   - `auto x{1l};` 注意一个`l`表示`Long Double`
 - 位运算符使用有何注意事项？
@@ -478,3 +478,248 @@
 ### 5 struct、class
 - `struct` 和 `class`的区别？
   - 主要区别是 `struct`默认 `public` , `class` 默认 `private`
+
+## 友元与继承
+### 1 友元
+- 什么是友元函数？
+  - 函数不属于某个类
+  - 需要在类中定义并声明friend
+  ```cpp
+  class A {
+      friend void print_A(const A &a);
+  public:
+      A(string s) :s(new string{s}){}
+  private:
+      string *s;
+  };
+  void print_A(const A &a) {
+      cout << *a.s << endl;
+  } // 加了 friend 就可以访问a的私有成员 s
+  int main() {
+      A a("xxx");
+      print_A(a);
+  }
+  ```
+- 什么是友元类？
+  - 友元类中的所有成员函数都是另一个类的友元函数
+  > - 友元是单向的
+  > - 友元关系不会被继承
+  ```cpp
+  class A {
+    friend class B;
+  public:
+      A(string s) :s(new string{s}){}
+  private:
+      string *s;
+  };
+  class B{
+  public:
+    void print_A(const A &a) {
+        cout << *a.s << endl;
+    }
+  };
+  int main() {
+      A a("xxx");
+      B b;
+      b.print_A(a);
+  }
+  ```
+  > 可以理解为对于`B`而言，`A`完全没有封装
+- 如何重载 `<<` 实现打印自定义类？
+  - 定义一个友元函数，注意要定义为全局函数而不是成员函数。
+  > 如果不这么做，我们必须将我们重载的两个运算符添加进这两个标准库中才能完成调用，但是为标准库添加成员我们是做不到的，因此<<,>>不能声明为成员函数。
+  ```cpp
+  class A {
+      friend ostream &operator<<(ostream &out, const A &a);
+  public:
+      A(string s) :s(new string{s}){}
+  private:
+      string *s;
+  };
+  ostream &operator<<(ostream &out, const A &a) {
+      out << *a.s;
+      return out;
+  }
+  int main() {
+      A a("xxx");
+      cout << a << endl;
+  }
+  ```
+### 2 继承
+- 继承一般用在哪里？
+  - 提高扩展性：以一个已有的类作为基础构建新的类
+  - 提高可读性：避免重复代码
+- `protected` 和 `private` 有什么区别？
+  - `protected` 被继承之后，在类内可以修改，类外不可以
+  - `private` 都不可以
+  ```cpp
+  class A {
+  public:
+      A(int x, int y, int z) :x(x), y(y), z(z){}
+      int x;
+  protected:
+      int y;
+  private:
+      int z;
+  };
+  class B :public A{
+  public:
+      B(int x, int y, int z) :A(x, y, z){}
+      void func(int x, int y, int z) {
+          this->x = x;
+          this->y = y; // protected 在类外能被修改
+          // this->z = z; // private 在类外不能被修改
+      }
+  };
+
+  int main() {
+      B b(1, 2, 3);
+      b.x = 2;
+      // b.y = 3; // protected 在类外不能被修改
+      // b.z = 4; // private 在类外不能被修改
+  }
+  ```
+- 继承时，构造和析构函数调用顺序？
+  - 构造时，先调用父类构造函数，再调用子类构造函数
+  - 析构时，先调用子类析构函数函数，在调用父类析构函数
+  ```cpp
+  class A {
+  public:
+      A(string s) :s(s){
+          cout << "construct A" << endl;
+      }
+      ~A(){
+          cout << "deconstruct A" << endl;
+      }
+  private:
+      string s;
+  };
+  class B :public A{
+  public:
+      B(string s) :A(s){
+          cout << "construct B" << endl;
+      }
+      ~B(){
+          cout << "deconstruct B" << endl;
+      }
+  };
+
+  int main() {
+      B b("bbb");
+  }
+
+  // 运行结果：
+  // construct A
+  // construct B
+  // deconstruct B
+  // deconstruct A
+  ```
+- 三种继承的区别？
+  - `protected` 继承：（子类外）继承来的 `public` 属性/方法会降级为 `protected`
+  ```cpp
+  class A {
+  public:
+      A(int x, int y, int z) :x(x), y(y), z(z){}
+      int x;
+  protected:
+      int y;
+  private:
+      int z;
+  };
+  class B :protected A{
+  public:
+      B(int x, int y, int z) :A(x, y, z){}
+  };
+  class C :public B{
+  public:
+      C(int x, int y, int z) :B(x, y, z){}
+      void func(int x, int y, int z) {
+          this->x = x;  // C 继承到的 x,y 都是 protected
+          this->y = y;
+      }
+  };
+  int main() {
+      B b(1, 2, 3);
+      // protected 继承会导致 x 从 public 降级到 protected
+      // b.x = 2; // 无法访问 
+      C c(1, 2, 3);
+  }
+  ```
+  - `private` 继承： （子类外）所有继承来的属性/方法会降级成 `private`
+  ```cpp
+  class A {
+  public:
+      A(int x, int y, int z) :x(x), y(y), z(z){}
+      int x;
+      const int &get_x() const {return this->x;}
+  protected:
+      int y;
+  private:
+      int z;
+  };
+  class B :private A{
+  public:
+      B(int x, int y, int z) :A(x, y, z){}
+  };
+  class C :public B{
+  public:
+      C(int x, int y, int z) :B(x, y, z){}
+  };
+  int main() {
+      B b(1, 2, 3);
+      C c(1, 2, 3);
+      // get_x() 从 public 降级为 private
+      // cout << c.get_x(); // 无法访问
+  }
+  ```
+- 如何使用 `using` 提权？
+  ```cpp
+  class A {
+  public:
+      A(int x, int y, int z) :x(x), y(y), z(z){}
+      int x;
+      const int &get_x() const {return this->x;}
+  protected:
+      int y;
+  private:
+      int z;
+  };
+  class B :private A{
+  public:
+      B(int x, int y, int z) :A(x, y, z){}
+      using A::get_x; // 增加这行～
+  };
+  class C :public B{
+  public:
+      C(int x, int y, int z) :B(x, y, z){}
+  };
+  int main() {
+      B b(1, 2, 3);
+      C c(1, 2, 3);
+      cout << c.get_x();
+  }
+  ```
+- `static` 变量如何继承？
+  - 子类会继承 `static` 变量
+  - 可以重新初始化
+  ```cpp
+  class A {
+  public:
+      A(string s) :s(s){++cnt;}
+      string s;
+      static int cnt;
+  };
+  class B :public A{
+  public:
+      B(string s) :A(s){++cnt;}
+      static int cnt;// 子类自己的静态变量
+  };
+
+  int A::cnt{0};
+  int B::cnt{0};// 子类自己的静态变量
+  int main() {
+      B b("xxx");
+      cout << b.cnt << endl;
+  }
+  ```
+  > 若注释代码中那两行，会输出 `2`, 不注释会输出 `1`。
